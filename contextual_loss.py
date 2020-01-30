@@ -10,7 +10,7 @@ def pairwise_distances_sq_l2(x, y):
     x_norm = (x**2).sum(1).view(-1, 1)
     y_t = torch.transpose(y, 0, 1)
     y_norm = (y**2).sum(1).view(1, -1)
-    
+
     dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
 
     return torch.clamp(dist, 1e-5, 1e5)/x.size(1)
@@ -21,7 +21,7 @@ def pairwise_distances_cos(x, y):
     x_norm = torch.sqrt((x**2).sum(1).view(-1, 1))
     y_t = torch.transpose(y, 0, 1)
     y_norm = torch.sqrt((y**2).sum(1).view(1, -1))
-    
+
     dist = 1.-torch.mm(x, y_t)/x_norm/y_norm
 
     return dist
@@ -39,12 +39,12 @@ def get_DMat(X,Y,h=1.0,cb=0,splits=[128*3+256*3+512*4], cos_d=True):
             if cos_d:
                 ce = cb + splits[i]
                 M = M + pairwise_distances_cos(X[:,cb:ce],Y[:,cb:ce])
-            
+
                 cb = ce
             else:
                 ce = cb + splits[i]
                 M = M + torch.sqrt(pairwise_distances_sq_l2(X[:,cb:ce],Y[:,cb:ce]))
-            
+
                 cb = ce
 
     return M
@@ -66,7 +66,7 @@ def viz_d(zx,coords):
             x_norm = torch.sqrt((z**2).sum(1,keepdim=True))
             y_norm = torch.sqrt((anch**2).sum(1,keepdim=True))
             dz = torch.sum(z*anch,1,keepdim=True)/x_norm/y_norm
-            vizt = vizt+F.upsample(dz,(viz.size(2),viz.size(3)),mode='bilinear')*z.size(1)
+            vizt = vizt+F.interpolate(dz,(viz.size(2),viz.size(3)),mode='bilinear')*z.size(1)
 
         viz = torch.max(viz,vizt/torch.max(vizt))
 
@@ -89,10 +89,10 @@ def remd_loss(X,Y, h=None, cos_d=True, splits= [3+64+64+128+128+256+256+256+512+
 
     #Relaxed EMD
     CX_M = get_DMat(X,Y,1.,cos_d=True, splits=splits)
-    
+
     if return_mat:
         return CX_M
-    
+
     if d==3:
         CX_M = CX_M+get_DMat(X,Y,1.,cos_d=False, splits=splits)
 
@@ -129,7 +129,7 @@ def remd_loss_g(X,Y, GX, GY, h=1.0, splits= [3+64+64+128+128+256+256+256+512+512
 
     c1 = 10000.
     c2 = 1.
-    
+
     CX_M = get_DMat(X,Y,1.,cos_d=True, splits=splits)
 
     if d==3:
