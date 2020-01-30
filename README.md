@@ -1,7 +1,8 @@
 # Style Transfer by Relaxed Optimal Transport and Self-Similarity (STROTSS)
-Code for the paper https://arxiv.org/abs/1904.12785, to appear CVPR 2019
 
-Webdemo available at: http://style.ttic.edu 
+Modifed code (to make things clear) of the paper https://arxiv.org/abs/1904.12785, CVPR 2019
+
+Webdemo available at: http://style.ttic.edu
 
 ## Dependencies:
 * python3 >= 3.5
@@ -13,7 +14,7 @@ Webdemo available at: http://style.ttic.edu
 ### Unconstrained Style Transfer:
 
 ```
-python3 styleTransfer.py {PATH_TO_CONTENT} {PATH_TO_STYLE} {CONTENT_WEIGHT}
+python styleTransfer.py --content_path images/content_im.jpg --style_path images/style_im.jpg --content_weight 0.5
 ```
 
 The default content weight is 1.0 (for the images provided my personal favorite is 0.5, but generally 1.0 works well for most inputs). The content weight is actually multiplied by 16, see section 2.5 of paper for explanation. 
@@ -22,10 +23,10 @@ The resolution of the output can be set on line 80 of styleTransfer.py; the curr
 
 The output will appear in the same folder as 'styleTransfer.py' and be named 'output.png'
 
-### Spatially Guidaed Style Transfer:
+### Spatially Guided Style Transfer:
 
 ```
-python3 styleTransfer.py {PATH_TO_CONTENT} {PATH_TO_STYLE} {CONTENT_WEIGHT} -gr {PATH_TO_CONTENT_GUIDANCE} {PATH_TO_STYLE_GUIDANCE}
+python styleTransfer.py --content_path images/content_im.jpg --style_path images/style_im.jpg --content_weight 0.5 --content_guidance_path images/content_guidance.jpg --style_guidance_path images/style_guidance.jpg
 ```
 
 guidance should take the form of two masks such as these:
