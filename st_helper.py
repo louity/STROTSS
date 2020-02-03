@@ -37,7 +37,7 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
 
     ### Define Optimizer ###
     if use_pyr:
-        s_pyr = pyr_lap.dec_lap_pyr(stylized_im, 5)
+        s_pyr = pyr_lap.create_laplacian_pyramid(stylized_im, pyramid_depth=5)
         s_pyr = [Variable(li.data,requires_grad=True) for li in s_pyr]
     else:
         s_pyr = [Variable(stylized_im.data,requires_grad=True)]
@@ -67,7 +67,7 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
 
     ### Randomly choose spatial locations to extract features from ###
     if use_pyr:
-        stylized_im = pyr_lap.syn_lap_pyr(s_pyr)
+        stylized_im = pyr_lap.synthetize_image_from_laplacian_pyramid(s_pyr)
     else:
         stylized_im = s_pyr[0]
 
@@ -93,7 +93,7 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
         ### zero out gradients and compute output image from pyramid ##
         optimizer.zero_grad()
         if use_pyr:
-            stylized_im = pyr_lap.syn_lap_pyr(s_pyr)
+            stylized_im = pyr_lap.synthetize_image_from_laplacian_pyramid(s_pyr)
         else:
             stylized_im = s_pyr[0]
 
