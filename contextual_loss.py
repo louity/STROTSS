@@ -6,46 +6,38 @@ import time
 import utils
 
 def pairwise_distances_sq_l2(x, y):
-
+    # NOTE: understand
     x_norm = (x**2).sum(1).view(-1, 1)
-    y_t = torch.transpose(y, 0, 1)
     y_norm = (y**2).sum(1).view(1, -1)
 
-    dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
+    dist = x_norm + y_norm - 2.0 * torch.mm(x, y.t())
 
     return torch.clamp(dist, 1e-5, 1e5)/x.size(1)
 
 
 def pairwise_distances_cos(x, y):
+    x_normalized = x / x.norm(dim=1, keepdim=True)
+    y_normalized = y / y.norm(dim=1, keepdim=True)
 
-    x_norm = torch.sqrt((x**2).sum(1).view(-1, 1))
-    y_t = torch.transpose(y, 0, 1)
-    y_norm = torch.sqrt((y**2).sum(1).view(1, -1))
-
-    dist = 1.-torch.mm(x, y_t)/x_norm/y_norm
-
-    return dist
-
-def get_DMat(X,Y,h=1.0,cb=0,splits=[128*3+256*3+512*4], cos_d=True):
-    n = X.size(0)
-    m = Y.size(0)
-    M = utils.to_device(Variable(torch.zeros(n,m)))
+    return 1 - torch.mm(x_normalized, y_normalized.t())
 
 
-    if 1:
-        cb = 0
-        ce = 0
-        for i in range(len(splits)):
-            if cos_d:
-                ce = cb + splits[i]
-                M = M + pairwise_distances_cos(X[:,cb:ce],Y[:,cb:ce])
+def get_DMat(X,Y,h=1.0,start_index=0,splits=[128*3+256*3+512*4], use_cosine_distance=True):
+    M = utils.to_device(Variable(torch.zeros(X.size(0), Y.size(0))))
+    start_index = 0
+    end_index = 0
 
-                cb = ce
-            else:
-                ce = cb + splits[i]
-                M = M + torch.sqrt(pairwise_distances_sq_l2(X[:,cb:ce],Y[:,cb:ce]))
+    for i in range(len(splits)):
+        if use_cosine_distance:
+            end_index = start_index + splits[i]
+            M = M + pairwise_distances_cos(X[:,start_index:end_index],Y[:,start_index:end_index])
 
-                cb = ce
+            start_index = end_index
+        else:
+            end_index = start_index + splits[i]
+            M = M + torch.sqrt(pairwise_distances_sq_l2(X[:,start_index:end_index],Y[:,start_index:end_index]))
+
+            start_index = end_index
 
     return M
 
@@ -74,7 +66,7 @@ def viz_d(zx,coords):
     viz = viz.data.cpu().numpy()[0,0,:,:]/len(zx)
     return vis_o
 
-def remd_loss(X,Y, h=None, cos_d=True, splits= [3+64+64+128+128+256+256+256+512+512],return_mat=False):
+def remd_loss(X,Y, h=None, use_cosine_distance=True, splits= [3+64+64+128+128+256+256+256+512+512],return_mat=False):
 
     d = X.size(1)
 
@@ -88,13 +80,13 @@ def remd_loss(X,Y, h=None, cos_d=True, splits= [3+64+64+128+128+256+256+256+512+
         Y = Y.transpose(0,1).contiguous().view(d,-1).transpose(0,1)
 
     #Relaxed EMD
-    CX_M = get_DMat(X,Y,1.,cos_d=True, splits=splits)
+    CX_M = get_DMat(X,Y,1.,use_cosine_distance=True, splits=splits)
 
     if return_mat:
         return CX_M
 
     if d==3:
-        CX_M = CX_M+get_DMat(X,Y,1.,cos_d=False, splits=splits)
+        CX_M = CX_M+get_DMat(X,Y,1.,use_cosine_distance=False, splits=splits)
 
     m1,m1_inds = CX_M.min(1)
     m2,m2_inds = CX_M.min(0)
@@ -130,13 +122,13 @@ def remd_loss_g(X,Y, GX, GY, h=1.0, splits= [3+64+64+128+128+256+256+256+512+512
     c1 = 10000.
     c2 = 1.
 
-    CX_M = get_DMat(X,Y,1.,cos_d=True, splits=splits)
+    CX_M = get_DMat(X,Y,1.,use_cosine_distance=True, splits=splits)
 
     if d==3:
-        CX_M = CX_M+get_DMat(X,Y,1.,cos_d=False, splits=splits)
+        CX_M = CX_M+get_DMat(X,Y,1.,use_cosine_distance=False, splits=splits)
 
 
-    CX_M_2 = get_DMat(GX,GY,1.,cos_d=True, splits=splits)+get_DMat(GX,GY,1.,cos_d=False, splits=splits)#CX_M[i:,i:].clone()
+    CX_M_2 = get_DMat(GX,GY,1.,use_cosine_distance=True, splits=splits)+get_DMat(GX,GY,1.,use_cosine_distance=False, splits=splits)#CX_M[i:,i:].clone()
     for i in range(GX.size(0)-1):
         CX_M_2[(i+1):,i] = CX_M_2[(i+1):,i]*1000.
         CX_M_2[i,(i+1):] = CX_M_2[i,(i+1):]*1000.
@@ -255,15 +247,15 @@ def dp_loss(X,Y):
     X = X[:,:-2]
 
     if 0:
-        dM = torch.exp(-2.*get_DMat(Xc,Xc,1., cos_d=False))
+        dM = torch.exp(-2.*get_DMat(Xc,Xc,1., use_cosine_distance=False))
         dM = dM/dM.sum(0,keepdim=True).detach()*dM.size(0)
     else:
         dM = 1.
 
-    Mx = get_DMat(X,X,1.,cos_d=True,splits=[X.size(1)])
+    Mx = get_DMat(X,X,1.,use_cosine_distance=True,splits=[X.size(1)])
     Mx = Mx/Mx.sum(0,keepdim=True)
 
-    My = get_DMat(Y,Y,1.,cos_d=True,splits=[X.size(1)])
+    My = get_DMat(Y,Y,1.,use_cosine_distance=True,splits=[X.size(1)])
     My = My/My.sum(0,keepdim=True)
 
     d = torch.abs(dM*(Mx-My)).mean()*X.size(0)
