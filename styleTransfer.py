@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 import torchvision
 import torch
 import time
@@ -83,8 +84,7 @@ def run_style_transfer(content_path, style_path, content_weight, max_scale, coor
         content_weight /= 2.0
         print('...done in {:.1f} sec'.format(time.time()-t0))
 
-    print("Finished in: ", int(time.time()-start), 'Seconds')
-    print('Final Loss:', final_loss)
+    print('Finished in {:.1f} secs, final loss {:.3f}' .format(time.time()-start, final_loss.item()))
 
     canvas = torch.clamp(stylized_im[0],-0.5,0.5).data.cpu().numpy().transpose(1,2,0)
     imwrite(output_path,canvas)
@@ -92,7 +92,7 @@ def run_style_transfer(content_path, style_path, content_weight, max_scale, coor
 
 if __name__=='__main__':
 
-    parser = argparse.ArgumentParser('style transfer by relaxed opt transport')
+    parser = argparse.ArgumentParser('style transfer by relaxed optimal transport')
     parser.add_argument('--content_path', help="path of content img", required=True)
     parser.add_argument('--style_path', help="path of style img", required=True)
     parser.add_argument('--content_weight', type=float, help='no padding used', default=0.5)
@@ -102,14 +102,13 @@ if __name__=='__main__':
     parser.add_argument('--style_guidance_path', default='', help="path of style guidance regions image")
 
     args = parser.parse_args()
-    torch.manual_seed(args.seed)
 
-    ### Parse Command Line Arguments ###
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
     content_path = args.content_path
     style_path = args.style_path
     content_weight = 16 * args.content_weight
     max_scale = args.max_scale
-
     use_guidance_region = args.content_guidance_path and args.load_style_guidance_path
     use_guidance_points = False
 

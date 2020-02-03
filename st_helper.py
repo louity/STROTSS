@@ -1,8 +1,6 @@
 from glob import glob
-import shutil
 
 import torch
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 from imageio import imwrite
@@ -38,14 +36,14 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
     ### Define Optimizer ###
     if use_pyr:
         s_pyr = pyr_lap.create_laplacian_pyramid(stylized_im, pyramid_depth=5)
-        s_pyr = [Variable(li.data,requires_grad=True) for li in s_pyr]
+        parameters = [torch.nn.Parameter(li.data, requires_grad=True) for li in s_pyr]
     else:
-        s_pyr = [Variable(stylized_im.data,requires_grad=True)]
+        parameters = [torch.nn.Parameter(stylized_im.data, requires_grad=True)]
 
-    optimizer =  optim.RMSprop(s_pyr,lr=lr)
+    optimizer = optim.RMSprop(parameters, lr=lr)
 
     ### Pre-Extract Content Features ###
-    z_c = cnn(content_im)
+    content_im_cnn_features = cnn(content_im)
 
     ### Pre-Extract Style Features from a Folder###
     paths = glob(style_path+'*')[::3]
@@ -67,9 +65,9 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
 
     ### Randomly choose spatial locations to extract features from ###
     if use_pyr:
-        stylized_im = pyr_lap.synthetize_image_from_laplacian_pyramid(s_pyr)
+        stylized_im = pyr_lap.synthetize_image_from_laplacian_pyramid(parameters)
     else:
-        stylized_im = s_pyr[0]
+        stylized_im = parameters[0]
 
     for ri in range(len(regions[0])):
         r_temp = regions[0][ri]
@@ -81,7 +79,7 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
         else:
             r = np.greater(r,0.5)
 
-        objective_wrapper.init_inds(z_c, z_s_all,r,ri)
+        objective_wrapper.init_inds(content_im_cnn_features, z_s_all,r,ri)
 
     if use_guidance:
         objective_wrapper.init_g_inds(coords, stylized_im)
@@ -89,13 +87,11 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
 
 
     for i in range(max_iter):
-
-        ### zero out gradients and compute output image from pyramid ##
         optimizer.zero_grad()
         if use_pyr:
-            stylized_im = pyr_lap.synthetize_image_from_laplacian_pyramid(s_pyr)
+            stylized_im = pyr_lap.synthetize_image_from_laplacian_pyramid(parameters)
         else:
-            stylized_im = s_pyr[0]
+            stylized_im = parameters[0]
 
         ## Dramatically Resample Large Set of Spatial Locations ##
         if i==0 or i % (resample_freq*10) == 0:
@@ -110,27 +106,23 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
                 else:
                     r = np.greater(r,0.5)
 
-                objective_wrapper.init_inds(z_c, z_s_all,r,ri)
+                objective_wrapper.init_inds(content_im_cnn_features, z_s_all,r,ri)
 
         ## Subsample spatial locations to compute loss over ##
         if i==0 or i%resample_freq == 0:
             objective_wrapper.shuffle_feature_inds()
 
-        ## Extract Features from Current Output
-        z_x = cnn(stylized_im)
+        stylized_im_cnn_features = cnn(stylized_im)
 
-        ## Compute Objective and take gradient step ##
-        loss = objective_wrapper.eval(z_x, z_c, z_s_all, gs, 0., content_weight=content_weight,moment_weight=1.0)
+        loss = objective_wrapper.eval(stylized_im_cnn_features, content_im_cnn_features, z_s_all, gs, 0., content_weight=content_weight,moment_weight=1.0)
 
         loss.backward()
         optimizer.step()
 
-        ## Periodically save output image for GUI ###
         if save_intermediate and (i+1) % 20 == 0:
             canvas = utils.aug_canvas(stylized_im, scale, i)
             imwrite(output_path, canvas)
 
-        ### Periodically Report Loss and Save Current Image ###
         if i % print_freq == 0:
             print('step {}/{}, loss {:.4f}'.format(i, max_iter, loss.item()))
 
