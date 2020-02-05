@@ -109,7 +109,7 @@ if __name__=='__main__':
     style_path = args.style_path
     content_weight = 16 * args.content_weight
     max_scale = args.max_scale
-    use_guidance_region = args.content_guidance_path and args.load_style_guidance_path
+    use_guidance_region = args.content_guidance_path and args.style_guidance_path
     use_guidance_points = False
 
 
@@ -121,7 +121,7 @@ if __name__=='__main__':
     ### Preprocess User Guidance if Required ###
     coords=0.
     if use_guidance_region:
-        regions = utils.extract_regions(args.content_guidance_path, args.load_style_guidance_path)
+        regions = utils.extract_regions(args.content_guidance_path, args.style_guidance_path)
     else:
         try:
             regions = [[imread(content_path)[:,:,0]*0.+1.], [imread(style_path)[:,:,0]*0.+1.]]
