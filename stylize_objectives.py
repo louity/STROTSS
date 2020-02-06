@@ -1,23 +1,23 @@
 import math
 
 import torch
-from torch.autograd import Variable
-import torch.nn.functional as F
+import numpy as np
 
-from contextual_loss import *
+import contextual_loss
 import utils
 
 use_random=True
 
 class objective_class():
 
-    def __init__(self, objective='remd_dp'):
+    def __init__(self, objective='remd_dp', use_sinkhorn=False):
 
         self.z_dist = torch.zeros(1).cuda()
 
         self.rand_ixx = {}
         self.rand_ixy = {}
         self.rand_iy = {}
+        self.use_sinkhorn = use_sinkhorn
 
         if objective == 'remd_dp':
             self.eval = self.gen_remd_dp_objective
@@ -25,7 +25,7 @@ class objective_class():
         if objective == 'remd_dp_g':
             self.eval = self.gen_remd_dp_objective_guided
 
-    def gen_remd_dp_objective_guided(self, z_x, z_c, z_s, gz, d_ell, d_weight=10.0, content_weight=4.0, moment_weight=1.0, style_loss_func=remd_loss, content_loss_func=dp_loss, h=1.0):
+    def gen_remd_dp_objective_guided(self, z_x, z_c, z_s, gz, d_ell, d_weight=10.0, content_weight=4.0, moment_weight=1.0, h=1.0):
 
 
         ## Extract Random Subset of Features from Stylized Image & Content Image ##
@@ -48,33 +48,33 @@ class objective_class():
 
             fm = 3+2*64+128*2+256*3+512*2
 
-            ell_content = content_loss_func(x_st[:,:,:,:], c_st[:,:,:,:])
+            ell_content = contextual_loss.dp_loss(x_st[:,:,:,:], c_st[:,:,:,:])
 
 
             ## Compute Style Loss ##
-            remd_loss, used_style_feats = style_loss_func(x_st[:,:fm,:,:], z_st[:,:fm,:,:], self.z_dist, splits=[fm])
+            remd_loss = contextual_loss.remd_loss(x_st[:,:fm,:,:], z_st[:,:fm,:,:], self.z_dist, splits=[fm], use_sinkhorn=self.use_sinkhorn)
 
             if gz.sum() > 0.:
                 for j in range(gz.size(2)):
-                    remd_loss += style_loss_func(gx_st[:,:-2,j:(j+1),:], gz[:,:,j:(j+1),:],self.z_dist[:1]*0.)[0]/gz.size(2)
+                    remd_loss += contextual_loss.remd_loss(gx_st[:,:-2,j:(j+1),:], gz[:,:,j:(j+1),:],self.z_dist[:1]*0., use_sinkhorn=self.use_sinkhorn)/gz.size(2)
 
             ### Compute Moment Loss (constrains magnitude of features ###
             moment_ell = 0.
             if gz.sum() > 0.:
-                moment_ell = moment_loss(torch.cat([x_st,gx_st],2)[:,:-2,:,:],torch.cat([z_st,gz],2),moments=[1,2])
+                moment_ell = contextual_loss.moment_loss(torch.cat([x_st,gx_st],2)[:,:-2,:,:],torch.cat([z_st,gz],2),moments=[1,2])
             else:
-                moment_ell = moment_loss(x_st[:,:-2,:,:],z_st,moments=[1,2])
+                moment_ell = contextual_loss.moment_loss(x_st[:,:-2,:,:],z_st,moments=[1,2])
 
-            ### Add Pallette Matching Loss ###                                        
+            ### Add Pallette Matching Loss ###
             content_weight_frac = 1./max(content_weight,1.)
-            moment_ell += content_weight_frac*style_loss_func(x_st[:,:3,:,:], z_st[:,:3,:,:],self.z_dist,splits=[3])[0]
+            moment_ell += content_weight_frac*contextual_loss.remd_loss(x_st[:,:3,:,:], z_st[:,:3,:,:],self.z_dist,splits=[3], use_sinkhorn=self.use_sinkhorn)
 
 
             ### Combine Terms and Normalize ###
             ell_style = remd_loss+moment_weight*moment_ell
             style_weight = 1.0 + moment_weight
             final_loss += (content_weight*ell_content+ell_style)/(content_weight+style_weight)
-        
+
         return final_loss/len(self.rand_ixx.keys())
 
 
@@ -106,20 +106,20 @@ class objective_class():
             if use_random:
                 stride_x = int(max(math.floor(math.sqrt(big_size//const)),1))
                 offset_x = np.random.randint(stride_x)
-                
+
                 stride_y = int(max(math.ceil(math.sqrt(big_size//const)),1))
                 offset_y = np.random.randint(stride_y)
             else:
                 stride_x = int(max(math.floor(math.sqrt(big_size//const)),1))
                 offset_x = stride_x//2
-                
+
                 stride_y = int(max(math.ceil(math.sqrt(big_size//const)),1))
                 offset_y = stride_y//2
 
             region_mask = r#.flatten()
 
             xx,xy = np.meshgrid(np.array(range(x_st.size(2)))[offset_x::stride_x], np.array(range(x_st.size(3)))[offset_y::stride_y] )
-            
+
             xx = np.expand_dims(xx.flatten(),1)
             xy = np.expand_dims(xy.flatten(),1)
             xc = np.concatenate([xx,xy],1)
@@ -141,7 +141,7 @@ class objective_class():
 
         self.g_ixx = (coords[:,0]*x_im.size(2)).astype(np.int64)
         self.g_ixy = (coords[:,1]*x_im.size(3)).astype(np.int64)
-   
+
 
     def spatial_feature_extract(self, z_x, z_c, xx, xy):
 
@@ -180,7 +180,7 @@ class objective_class():
 
             temp = temp.view(1,temp.size(1),temp.size(2)*temp.size(3),1)
             temp = temp[:,:,s00,:].mul_(w00).add_(temp[:,:,s01,:].mul_(w01)).add_(temp[:,:,s10,:].mul_(w10)).add_(temp[:,:,s11,:].mul_(w11))
-            
+
 
             temp2 = temp2.view(1,temp2.size(1),temp2.size(2)*temp2.size(3),1)
             temp2 = temp2[:,:,s00,:].mul_(w00).add_(temp2[:,:,s01,:].mul_(w01)).add_(temp2[:,:,s10,:].mul_(w10)).add_(temp2[:,:,s11,:].mul_(w11))
@@ -228,7 +228,7 @@ class objective_class():
             yx =  self.rand_iy[ri][i][::(self.rand_iy[ri][i].shape[0]//cnt)]
 
         return xx, xy, yx
-    
+
     def get_feature_inds_g(self, i=0, cnt=32**2):
 
         xx = self.g_ixx

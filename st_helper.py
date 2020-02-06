@@ -14,8 +14,7 @@ from stylize_objectives import objective_class
 def style_transfer(stylized_im, content_im, style_path, output_path,
                    scale, long_side, mask, content_weight=0., use_guidance=False,
                    regions=0, coords=0, lr=2e-3, save_intermediate=False,
-                   print_freq=100, max_iter=250, resample_freq=1, use_pyr=True):
-
+                   print_freq=100, max_iter=250, resample_freq=1, use_pyr=True, use_sinkhorn=False):
 
     ### Keep track of current output image for GUI ###
     canvas = utils.aug_canvas(stylized_im, scale, 0)
@@ -50,7 +49,7 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
 
     ### Create Objective Object ###
     objective_wrapper = 0
-    objective_wrapper = objective_class(objective='remd_dp_g')
+    objective_wrapper = objective_class(objective='remd_dp_g', use_sinkhorn=use_sinkhorn)
 
     z_s_all = []
     for ri in range(len(regions[1])):
@@ -87,6 +86,9 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
 
 
     for i in range(max_iter):
+        if i == 200:
+            optimizer = optim.RMSprop(parameters, lr=0.1*lr)
+
         optimizer.zero_grad()
         if use_pyr:
             stylized_im = pyr_lap.synthetize_image_from_laplacian_pyramid(parameters)

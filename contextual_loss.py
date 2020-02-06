@@ -1,8 +1,6 @@
 import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
-import numpy as np
-import time
 import utils
 
 def pairwise_distances_sq_l2(x, y):
@@ -66,7 +64,7 @@ def viz_d(zx,coords):
     viz = viz.data.cpu().numpy()[0,0,:,:]/len(zx)
     return vis_o
 
-def remd_loss(X,Y, h=None, use_cosine_distance=True, splits= [3+64+64+128+128+256+256+256+512+512],return_mat=False):
+def remd_loss(X,Y, h=None, use_cosine_distance=True, splits= [3+64+64+128+128+256+256+256+512+512],return_mat=False, use_sinkhorn=False):
 
     d = X.size(1)
 
@@ -88,16 +86,14 @@ def remd_loss(X,Y, h=None, use_cosine_distance=True, splits= [3+64+64+128+128+25
     if d==3:
         CX_M = CX_M+get_DMat(X,Y,1.,use_cosine_distance=False, splits=splits)
 
-    m1,m1_inds = CX_M.min(1)
-    m2,m2_inds = CX_M.min(0)
-    if m1.mean() > m2.mean():
-        used_style_feats = Y[m1_inds,:]
+    if use_sinkhorn:
+        remd = sinkhorn(CX_M)
     else:
-        used_style_feats = Y
+        m1, _ = CX_M.min(1)
+        m2, _ = CX_M.min(0)
+        remd = torch.max(m1.mean(),m2.mean())
 
-    remd = torch.max(m1.mean(),m2.mean())
-
-    return remd, used_style_feats
+    return remd
 
 
 
@@ -287,3 +283,23 @@ def dp_loss_g(X,Y,GX):
 
 
     return d
+
+
+def sinkhorn(cost_matrix, reg=1e-1, maxiter=30):
+    m, n = cost_matrix.size()
+
+    a, u = torch.ones(m)/m, torch.ones(m)/m
+    b, v = torch.ones(n)/n, torch.ones(n)/n
+
+    if torch.cuda.is_available():
+        a, b, u, v = a.cuda(), b.cuda(), u.cuda(), v.cuda()
+
+    K = torch.exp(-cost_matrix / reg)
+
+    Kp = (1 / a).view(-1, 1) * K
+    for i in range(maxiter):
+        KtransposeU = K.t().matmul(u)
+        v = torch.div(b, KtransposeU)
+        u = 1. / Kp.matmul(v)
+
+    return torch.sum(u.view((-1, 1)) * K * v.view((1, -1)) * cost_matrix)

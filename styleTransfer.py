@@ -12,7 +12,7 @@ from glob import glob
 import st_helper
 import utils
 
-def run_style_transfer(content_path, style_path, content_weight, max_scale, coords, use_guidance, regions, output_path='./output.png'):
+def run_style_transfer(content_path, style_path, content_weight, max_scale, coords, use_guidance, regions, output_path='./output.png', print_freq=100, use_sinkhorn=False):
 
     smallest_size = 64
     start = time.time()
@@ -76,30 +76,32 @@ def run_style_transfer(content_path, style_path, content_weight, max_scale, coor
             lr = 1e-3
 
         ### Style Transfer at this scale ###
-        stylized_im, final_loss = st_helper.style_transfer(stylized_im, content_image_scaled, style_path, output_path, scale, scaled_size, 0., use_guidance=use_guidance, coords=coords, content_weight=content_weight, lr=lr, regions=regions)
+        stylized_im, final_loss = st_helper.style_transfer(stylized_im, content_image_scaled, style_path, output_path, scale, scaled_size, 0., use_guidance=use_guidance, coords=coords, content_weight=content_weight, lr=lr, regions=regions, print_freq=print_freq, use_sinkhorn=use_sinkhorn)
 
         canvas = F.interpolate(stylized_im.clamp(-0.5, 0.5), (scaled_H, scaled_W),mode='bilinear')[0].detach().cpu().numpy().transpose(1,2,0)
 
         ### Decrease Content Weight for next scale ###
         content_weight /= 2.0
-        print('...done in {:.1f} sec'.format(time.time()-t0))
+        print('...done in {:.1f} sec, final loss {:.4f}'.format(time.time()-t0, final_loss.item()))
 
-    print('Finished in {:.1f} secs, final loss {:.3f}' .format(time.time()-start, final_loss.item()))
+    print('Finished in {:.1f} secs' .format(time.time()-start))
 
     canvas = torch.clamp(stylized_im[0],-0.5,0.5).data.cpu().numpy().transpose(1,2,0)
     imwrite(output_path,canvas)
     return final_loss , stylized_im
 
 if __name__=='__main__':
-
     parser = argparse.ArgumentParser('style transfer by relaxed optimal transport')
     parser.add_argument('--content_path', help="path of content img", required=True)
     parser.add_argument('--style_path', help="path of style img", required=True)
+    parser.add_argument('--output_path', help="path of output img", default='output.png')
     parser.add_argument('--content_weight', type=float, help='no padding used', default=0.5)
-    parser.add_argument('--max_scale', type=int, help='no padding used', default=4)
+    parser.add_argument('--max_scale', type=int, help='max scale for the style transfer', default=4)
     parser.add_argument('--seed', type=int, help='random seed', default=0)
     parser.add_argument('--content_guidance_path', default='', help="path of content guidance region image")
     parser.add_argument('--style_guidance_path', default='', help="path of style guidance regions image")
+    parser.add_argument('--print_freq', type=int, default=100, help='print frequency for the loss')
+    parser.add_argument('--use_sinkhorn', action='store_true', help='use sinkhorn algo. for the earth mover distance')
 
     args = parser.parse_args()
 
@@ -129,4 +131,4 @@ if __name__=='__main__':
             regions = [[imread(content_path)[:,:]*0.+1.], [imread(style_path)[:,:]*0.+1.]]
 
     ### Style Transfer and save output ###
-    loss, canvas = run_style_transfer(content_path,style_path,content_weight,max_scale,coords,use_guidance_points,regions)
+    loss, canvas = run_style_transfer(content_path,style_path,content_weight,max_scale,coords,use_guidance_points,regions, args.output_path, print_freq=args.print_freq, use_sinkhorn=args.use_sinkhorn)
