@@ -17,11 +17,11 @@ def run_style_transfer(content_path, style_path, content_weight, max_scale, coor
     smallest_size = 64
     start = time.time()
 
-    content_image = torchvision.transforms.functional.to_tensor(Image.open(content_path)) - 0.5
+    content_image = torchvision.transforms.functional.to_tensor(Image.open(content_path).convert('RGB')) - 0.5
     _, content_H, content_W = content_image.size()
     print('content image size {}x{}'.format(content_H, content_W))
 
-    style_image = torchvision.transforms.functional.to_tensor(Image.open(style_path)) - 0.5
+    style_image = torchvision.transforms.functional.to_tensor(Image.open(style_path).convert('RGB')) - 0.5
     _, style_H, style_W = style_image.size()
     print('style image size {}x{}'.format(style_H, style_W))
 
@@ -51,6 +51,8 @@ def run_style_transfer(content_path, style_path, content_weight, max_scale, coor
             content_image_scaled = content_image_scaled.cuda()
 
 
+
+        print(style_image.shape, content_image_scaled.shape)
         style_image_mean = style_image.unsqueeze(0).mean(dim=(2, 3), keepdim=True)
         if torch.cuda.is_available():
             style_image_mean = style_image_mean.cuda()
