@@ -51,8 +51,6 @@ def run_style_transfer(content_path, style_path, content_weight, max_scale, coor
             content_image_scaled = content_image_scaled.cuda()
 
 
-
-        print(style_image.shape, content_image_scaled.shape)
         style_image_mean = style_image.unsqueeze(0).mean(dim=(2, 3), keepdim=True)
         if torch.cuda.is_available():
             style_image_mean = style_image_mean.cuda()
