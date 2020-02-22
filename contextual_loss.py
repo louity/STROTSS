@@ -88,6 +88,7 @@ def remd_loss(X,Y, h=None, use_cosine_distance=True, splits= [3+64+64+128+128+25
 
     if use_sinkhorn:
         remd = sinkhorn(CX_M)
+        # remd = sinkhorn_logsumexp(CX_M)
     else:
         m1, _ = CX_M.min(1)
         m2, _ = CX_M.min(0)
@@ -303,3 +304,43 @@ def sinkhorn(cost_matrix, reg=1e-1, maxiter=30):
         u = 1. / Kp.matmul(v)
 
     return torch.sum(u.view((-1, 1)) * K * v.view((1, -1)) * cost_matrix)
+
+
+def barycenter(point1, point2, t):
+    return t * point1 + (1 - t) * point2
+
+def sinkhorn_logsumexp(cost_matrix, reg=1e-1, maxiter=30, nesterov=False):
+    m, n = cost_matrix.size()
+
+    mu = Variable(1. / m * torch.FloatTensor(m).fill_(1), requires_grad=False)
+    nu = Variable(1. / n * torch.FloatTensor(n).fill_(1), requires_grad=False)
+
+    if torch.cuda.is_available():
+        mu, nu = mu.cuda(), nu.cuda()
+
+    rho = 1  # (.5) **2          # unbalanced transport
+    tau = -.8  # nesterov-like acceleration
+    lam = rho / (rho + reg)  # Update exponent
+
+
+    def M(u, v):
+        "Modified cost for logarithmic updates"
+        "$M_{ij} = (-c_{ij} + u_i + v_j) / \epsilon$"
+        return (-cost_matrix + u.unsqueeze(1) + v.unsqueeze(0)) / reg
+
+    u, v = 0. * mu, 0. * nu
+
+    # Actual Sinkhorn loop
+    for i in range(maxiter):
+        u1, v1 = u, v
+        u = reg * (torch.log(mu) - torch.logsumexp(M(u, v), dim=1).squeeze()) + u
+        v = reg * (torch.log(nu) - torch.logsumexp(M(u, v).t(), dim=1).squeeze()) + v
+        if nesterov:
+            u = barycenter(u1, lam * u, tau)
+            v = barycenter(v1, lam * v, tau)
+        # err = (u - u1).abs().sum()
+
+    pi = torch.exp(M(u, v))  # Transport plan pi = diag(a)*K*diag(b)
+    cost = torch.sum(pi * cost_matrix)  # Sinkhorn cost
+
+    return cost
