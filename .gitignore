@@ -1,4 +1,7 @@
 __pycache__
 *.jpg
 *.png
+*.gif
+*.mp4
 !images/*.jpg
+.ipynb_checkpoints
