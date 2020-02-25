@@ -12,7 +12,7 @@ from glob import glob
 import st_helper
 import utils
 
-def run_style_transfer(content_path, style_path, content_weight, max_scale, coords, use_guidance, regions, output_path='./output.png', print_freq=100, use_sinkhorn=False):
+def run_style_transfer(content_path, style_path, content_weight, max_scale, coords, use_guidance, regions, output_path='./output.png', print_freq=100, use_sinkhorn=False, sinkhorn_reg=0.1, sinkhorn_maxiter=30):
 
     smallest_size = 64
     start = time.time()
@@ -76,7 +76,7 @@ def run_style_transfer(content_path, style_path, content_weight, max_scale, coor
             lr = 1e-3
 
         ### Style Transfer at this scale ###
-        stylized_im, final_loss = st_helper.style_transfer(stylized_im, content_image_scaled, style_path, output_path, scale, scaled_size, 0., use_guidance=use_guidance, coords=coords, content_weight=content_weight, lr=lr, regions=regions, print_freq=print_freq, use_sinkhorn=use_sinkhorn)
+        stylized_im, final_loss = st_helper.style_transfer(stylized_im, content_image_scaled, style_path, output_path, scale, scaled_size, 0., use_guidance=use_guidance, coords=coords, content_weight=content_weight, lr=lr, regions=regions, print_freq=print_freq, use_sinkhorn=use_sinkhorn, sinkhorn_reg=sinkhorn_reg, sinkhorn_maxiter=sinkhorn_maxiter)
 
         canvas = F.interpolate(stylized_im.clamp(-0.5, 0.5), (scaled_H, scaled_W),mode='bilinear')[0].detach().cpu().numpy().transpose(1,2,0)
 
@@ -102,6 +102,8 @@ if __name__=='__main__':
     parser.add_argument('--style_guidance_path', default='', help="path of style guidance regions image")
     parser.add_argument('--print_freq', type=int, default=100, help='print frequency for the loss')
     parser.add_argument('--use_sinkhorn', action='store_true', help='use sinkhorn algo. for the earth mover distance')
+    parser.add_argument('--sinkhorn_reg', type=float, help='reg param for sinkhorn', default=0.1)
+    parser.add_argument('--sinkhorn_maxiter', type=int, default=30, help='number of interations for sinkohrn algo')
 
     args = parser.parse_args()
 
@@ -131,4 +133,4 @@ if __name__=='__main__':
             regions = [[imread(content_path)[:,:]*0.+1.], [imread(style_path)[:,:]*0.+1.]]
 
     ### Style Transfer and save output ###
-    loss, canvas = run_style_transfer(content_path,style_path,content_weight,max_scale,coords,use_guidance_points,regions, args.output_path, print_freq=args.print_freq, use_sinkhorn=args.use_sinkhorn)
+    loss, canvas = run_style_transfer(content_path,style_path,content_weight,max_scale,coords,use_guidance_points,regions, args.output_path, print_freq=args.print_freq, use_sinkhorn=args.use_sinkhorn, sinkhorn_reg=args.sinkhorn_reg, sinkhorn_maxiter=args.sinkhorn_maxiter)

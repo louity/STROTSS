@@ -10,7 +10,7 @@ use_random=True
 
 class objective_class():
 
-    def __init__(self, objective='remd_dp', use_sinkhorn=False):
+    def __init__(self, objective='remd_dp', use_sinkhorn=False, sinkhorn_reg=1e-1, sinkhorn_maxiter=30):
 
         self.z_dist = torch.zeros(1).cuda()
 
@@ -18,6 +18,8 @@ class objective_class():
         self.rand_ixy = {}
         self.rand_iy = {}
         self.use_sinkhorn = use_sinkhorn
+        self.sinkhorn_reg = sinkhorn_reg
+        self.sinkhorn_maxiter = sinkhorn_maxiter
 
         if objective == 'remd_dp':
             self.eval = self.gen_remd_dp_objective
@@ -52,7 +54,9 @@ class objective_class():
 
 
             ## Compute Style Loss ##
-            remd_loss = contextual_loss.remd_loss(x_st[:,:fm,:,:], z_st[:,:fm,:,:], self.z_dist, splits=[fm], use_sinkhorn=self.use_sinkhorn)
+            remd_loss = contextual_loss.remd_loss(x_st[:,:fm,:,:], z_st[:,:fm,:,:], self.z_dist, splits=[fm],
+                                                  use_cosine_distance=True,
+                                                  use_sinkhorn=self.use_sinkhorn, sinkhorn_reg=self.sinkhorn_reg, sinkhorn_maxiter=self.sinkhorn_maxiter)
 
             if gz.sum() > 0.:
                 for j in range(gz.size(2)):
@@ -67,7 +71,10 @@ class objective_class():
 
             ### Add Pallette Matching Loss ###
             content_weight_frac = 1./max(content_weight,1.)
-            moment_ell += content_weight_frac*contextual_loss.remd_loss(x_st[:,:3,:,:], z_st[:,:3,:,:],self.z_dist,splits=[3], use_sinkhorn=self.use_sinkhorn)
+            moment_ell += content_weight_frac*contextual_loss.remd_loss(x_st[:,:3,:,:], z_st[:,:3,:,:],
+                                                                        self.z_dist,splits=[3],
+                                                                        use_cosine_distance=False,
+                                                                        use_sinkhorn=self.use_sinkhorn)
 
 
             ### Combine Terms and Normalize ###

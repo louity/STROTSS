@@ -14,7 +14,8 @@ from stylize_objectives import objective_class
 def style_transfer(stylized_im, content_im, style_path, output_path,
                    scale, long_side, mask, content_weight=0., use_guidance=False,
                    regions=0, coords=0, lr=2e-3, save_intermediate=False,
-                   print_freq=100, max_iter=250, resample_freq=1, use_pyr=True, use_sinkhorn=False):
+                   print_freq=100, max_iter=250, resample_freq=1, use_pyr=True,
+                   use_sinkhorn=False, sinkhorn_reg=0.1, sinkhorn_maxiter=30):
 
     ### Keep track of current output image for GUI ###
     canvas = utils.aug_canvas(stylized_im, scale, 0)
@@ -49,7 +50,7 @@ def style_transfer(stylized_im, content_im, style_path, output_path,
 
     ### Create Objective Object ###
     objective_wrapper = 0
-    objective_wrapper = objective_class(objective='remd_dp_g', use_sinkhorn=use_sinkhorn)
+    objective_wrapper = objective_class(objective='remd_dp_g', use_sinkhorn=use_sinkhorn, sinkhorn_reg=sinkhorn_reg, sinkhorn_maxiter=sinkhorn_maxiter)
 
     z_s_all = []
     for ri in range(len(regions[1])):
